@@ -10,6 +10,7 @@ from typing import Final, Tuple
 from urllib import request
 
 dependencies = ["torch"]
+hub._validate_not_a_forked_repo = lambda a, b, c: True
 
 MIT_SEMSEG_DEFAULT_MODEL_NAME: Final = "ade20k-resnet101dilated-ppm_deepsup"
 
