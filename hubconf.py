@@ -2,7 +2,9 @@
 #!/usr/bin/env python3
 
 import os
+from posixpath import commonpath
 from shutil import rmtree
+import torch
 from torch import hub
 from torch import nn
 from torch.utils.model_zoo import load_url
@@ -156,3 +158,57 @@ def mit_semseg(
         seg_module.cuda()
 
     return seg_module
+
+
+ISL_MIDAS_MODEL_TYPES: Final = ["DPT_Large", "DPT_Hybrid", "MiDaS_small"]
+ISL_MIDAS_DEFAULT_MODEL_TYPE: Final = ISL_MIDAS_MODEL_TYPES[0]
+
+
+def isl_midas(
+    model_type=ISL_MIDAS_DEFAULT_MODEL_TYPE, clean_slate=False, use_cuda=True, **kwargs
+):
+    """
+    Depth estimation models by Intel ISL
+    model_type (string): Optional. Should be one of the following options:
+        DPT_Large,
+        DPT_Hybrid,
+        MiDaS_small
+    clean_state (bool): Optional. If True, the cached model files will be
+        deleted and newly downloaded from the repository (True by default).
+    use_cuda (bool): Optional. If True, CUDA acceleration will be used (True by default).
+    """
+    try:
+        import timm
+    except (ModuleNotFoundError, ImportError) as err:
+        print(f"err.__class__.__name__ : {err.msg}")
+    if model_type not in ISL_MIDAS_MODEL_TYPES:
+        return None, None
+    """
+    Todo:
+        torch.hub.set_dir() should not be invoked more than once
+        * Put those path control logic in a function
+        * Use pathlib instead of os.path
+    """
+    base_dir = os.path.join(hub.get_dir(), "lwp/isl_midas/models")
+    hub.set_dir(base_dir)
+    if clean_slate and os.path.exists(base_dir):
+        rmtree(base_dir)
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+    midas = hub.load("intel-isl/MiDaS", model_type)
+    midas.eval()
+    if use_cuda:
+        if not torch.cuda.is_available():
+            print("Warn: CUDA is not available; Using CPU fallback")
+            device = torch.device("cpu")
+        else:
+            device = torch.device("cuda")
+
+    midas.to(device)
+    _transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
+    if model_type == "MiDaS_small":
+        midas_transforms = _transforms.small_transform
+    else:
+        midas_transforms = _transforms.dpt_transform
+
+    return midas, midas_transforms
