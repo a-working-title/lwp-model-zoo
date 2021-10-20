@@ -2,7 +2,6 @@
 #!/usr/bin/env python3
 
 import os
-from shutil import rmtree
 import tempfile
 import torch
 from torch import hub
@@ -164,9 +163,7 @@ ISL_MIDAS_MODEL_TYPES: Final = ["DPT_Large", "DPT_Hybrid", "MiDaS_small"]
 ISL_MIDAS_DEFAULT_MODEL_TYPE: Final = ISL_MIDAS_MODEL_TYPES[0]
 
 
-def isl_midas(
-    model_type=ISL_MIDAS_DEFAULT_MODEL_TYPE, clean_slate=False, use_cuda=True, **kwargs
-):
+def isl_midas(model_type=ISL_MIDAS_DEFAULT_MODEL_TYPE, use_cuda=True, **kwargs):
     """
     Depth estimation models by Intel ISL
     model_type (string): Optional. Should be one of the following options:
@@ -178,21 +175,9 @@ def isl_midas(
     try:
         import timm
     except (ModuleNotFoundError, ImportError) as err:
-        print(f"err.__class__.__name__ : {err.msg}")
+        print(f"{err.__class__.__name__} : {err.msg}")
     if model_type not in ISL_MIDAS_MODEL_TYPES:
         return None, None
-    """
-    Todo:
-        torch.hub.set_dir() should not be invoked more than once
-        * Put those path control logic in a function
-        * Use pathlib instead of os.path
-    """
-    base_dir = os.path.join(hub.get_dir(), "lwp/isl_midas/models")
-    hub.set_dir(base_dir)
-    if clean_slate and os.path.exists(base_dir):
-        rmtree(base_dir)
-    if not os.path.exists(base_dir):
-        os.makedirs(base_dir)
     midas = hub.load("intel-isl/MiDaS", model_type)
     midas.eval()
     if use_cuda:
