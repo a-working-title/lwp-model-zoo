@@ -2,14 +2,14 @@
 #!/usr/bin/env python3
 
 import os
-from posixpath import commonpath
 from shutil import rmtree
+import tempfile
 import torch
 from torch import hub
 from torch import nn
 from torch.utils.model_zoo import load_url
 from typing import Final, Tuple
-from urllib import request
+from urllib import error as urllib_err
 
 dependencies = ["torch"]
 hub._validate_not_a_forked_repo = lambda a, b, c: True
@@ -18,85 +18,91 @@ MIT_SEMSEG_DEFAULT_MODEL_NAME: Final = "ade20k-resnet101dilated-ppm_deepsup"
 
 
 def _download_mit_sem_seg(
-    base_dir, model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME, clean_slate=False
+    model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME,
 ) -> Tuple[str, str, str]:
     BASE_URL: Final = "http://sceneparsing.csail.mit.edu/model/pytorch/"
-    DECODER_FMT: Final = "decoder_epoch_{}.pth"
-    ENCODER_FMT: Final = "encoder_epoch_{}.pth"
+    DECODER_FMT: Final = "{}_decoder_epoch_{}.pth"
+    ENCODER_FMT: Final = "{}_encoder_epoch_{}.pth"
     CFG_URL_FMT: Final = "https://raw.githubusercontent.com/CSAILVision/semantic-segmentation-pytorch/master/config/{}.yaml"
-    model_pairs: Final = {
-        "ade20k-hrnetv2-c1": (
-            DECODER_FMT.format(30),
-            ENCODER_FMT.format(30),
-            CFG_URL_FMT.format("ade20k-hrnetv2"),
+    MODEL_INFOS: Final = [
+        ("ade20k-hrnetv2-c1", 30, "ade20k-hrnetv2"),
+        (
+            "ade20k-mobilenetv2dilated-c1_deepsup",
+            20,
+            "ade20k-mobilenetv2dilated-c1_deepsup",
         ),
-        "ade20k-mobilenetv2dilated-c1_deepsup": (
-            DECODER_FMT.format(20),
-            ENCODER_FMT.format(20),
-            CFG_URL_FMT.format("ade20k-mobilenetv2dilated-c1_deepsup"),
+        ("ade20k-resnet18dilated-c1_deepsup", 20, None),
+        (
+            "ade20k-resnet18dilated-ppm_deepsup",
+            20,
+            "ade20k-resnet18dilated-ppm_deepsup",
         ),
-        "ade20k-resnet18dilated-c1_deepsup": (
-            DECODER_FMT.format(20),
-            ENCODER_FMT.format(20),
-            CFG_URL_FMT.format("ade20k-resnet18dilated-ppm_deepsup"),
+        ("ade20k-resnet50-upernet", 30, "ade20k-resnet50-upernet"),
+        (
+            "ade20k-resnet50dilated-ppm_deepsup",
+            20,
+            "ade20k-resnet50dilated-ppm_deepsup",
         ),
-        "ade20k-resnet18dilated-ppm_deepsup": (
-            DECODER_FMT.format(20),
-            ENCODER_FMT.format(20),
-            None,
+        ("ade20k-resnet101-upernet", 50, "ade20k-resnet101-upernet"),
+        (
+            "ade20k-resnet101dilated-ppm_deepsup",
+            25,
+            "ade20k-resnet101dilated-ppm_deepsup",
         ),
-        "ade20k-resnet50-upernet": (
-            DECODER_FMT.format(30),
-            ENCODER_FMT.format(30),
-            CFG_URL_FMT.format("ade20k-resnet50-upernet"),
-        ),
-        "ade20k-resnet50dilated-ppm_deepsup": (
-            DECODER_FMT.format(20),
-            ENCODER_FMT.format(20),
-            CFG_URL_FMT.format("ade20k-resnet50dilated-ppm_deepsup"),
-        ),
-        "ade20k-resnet101-upernet": (
-            DECODER_FMT.format(50),
-            ENCODER_FMT.format(50),
-            CFG_URL_FMT.format("ade20k-resnet101-upernet"),
-        ),
-        "ade20k-resnet101dilated-ppm_deepsup": (
-            DECODER_FMT.format(25),
-            ENCODER_FMT.format(25),
-            CFG_URL_FMT.format("ade20k-resnet101dilated-ppm_deepsup"),
-        ),
+    ]
+
+    found = False
+    for _model_info in MODEL_INFOS:
+        if model_name in _model_info:
+            found = True
+    if not found:
+        return None, None, None
+
+    model_pairs = {
+        m: (
+            DECODER_FMT.format(m, e),
+            ENCODER_FMT.format(m, e),
+            CFG_URL_FMT.format(c) if c is not None else None,
+        )
+        for m, e, c in MODEL_INFOS
     }
 
-    if model_name not in model_pairs.keys():
-        return None
+    decoder_name, encoder_name, cfg_url = model_pairs[model_name]
+    load_url(
+        BASE_URL + model_name + "/" + decoder_name[decoder_name.find("decoder") :],
+        file_name=decoder_name,
+    )
+    load_url(
+        BASE_URL + model_name + "/" + encoder_name[encoder_name.find("encoder") :],
+        file_name=encoder_name,
+    )
+    cfg_path = os.path.join(tempfile.gettempdir(), model_name + ".yaml")
+    try:
+        os.remove(cfg_path)
+    except:
+        pass
+    if cfg_url:
+        try:
+            hub.download_url_to_file(cfg_url, cfg_path)
+        except (
+            urllib_err.ContentTooShortError,
+            urllib_err.HTTPError,
+            urllib_err.URLError,
+        ) as err:
+            print(f"{err.__class__.__name__}: {err.msg}")
+            cfg_path = None
 
-    cache_dir = os.path.join(base_dir, model_name)
-    if clean_slate and os.path.exists(cache_dir):
-        rmtree(cache_dir)
-    if not os.path.exists(cache_dir):
-        os.makedirs(cache_dir)
-
-    decoder, encoder, cfg = model_pairs[model_name]
-    load_url(BASE_URL + model_name + "/" + decoder, model_dir=cache_dir)
-    load_url(BASE_URL + model_name + "/" + encoder, model_dir=cache_dir)
-
-    cfg_path = os.path.join(cache_dir, "{}.yaml".format(model_name))
-    if cfg:
-        request.urlretrieve(cfg, cfg_path)
-
-    decoder_path = os.path.join(cache_dir, decoder)
-    encoder_path = os.path.join(cache_dir, encoder)
+    decoder_path = os.path.join(hub.get_dir(), "checkpoints", decoder_name)
+    encoder_path = os.path.join(hub.get_dir(), "checkpoints", encoder_name)
 
     return (
         decoder_path if os.path.exists(decoder_path) else None,
         encoder_path if os.path.exists(encoder_path) else None,
-        cfg_path if os.path.exists(cfg_path) else None,
+        cfg_path if cfg_path is not None and os.path.exists(cfg_path) else None,
     )
 
 
-def mit_semseg(
-    model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME, clean_slate=False, use_cuda=True, **kwargs
-):
+def mit_semseg(model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME, use_cuda=True, **kwargs):
     """
     Semantic segmentation models on MIT ADE20K scene parsing dataset
     model_name (string): Optional. if it is given, load one of the following models;
@@ -108,8 +114,6 @@ def mit_semseg(
         ade20k-resnet50dilated-ppm_deepsup,
         ade20k-resnet101-upernet,
         ade20k-resnet101dilated-ppm_deepsup (default).
-    clean_state (bool): Optional. If True, the cached model files will be
-        deleted and newly downloaded from the repository (True by default).
     use_cuda (bool): Optional. If True, CUDA acceleration will be used (True by default).
     """
     try:
@@ -117,23 +121,19 @@ def mit_semseg(
         from mit_semseg.dataset import TestDataset
         from mit_semseg.models import ModelBuilder, SegmentationModule
     except (ModuleNotFoundError, ImportError) as err:
-        print(f"err.__class__.__name__ : {err.msg}")
+        print(f"{err.__class__.__name__} : {err.msg}")
+    model_name = "ade20k-resnet101-upernet"
 
-    base_dir = os.path.join(hub.get_dir(), "lwp/mit_semseg/models")
-    if not os.path.exists(base_dir):
-        os.makedirs(base_dir)
-
-    decoder_path, encoder_path, cfg_path = _download_mit_sem_seg(
-        base_dir, model_name, clean_slate=clean_slate
-    )
-
+    decoder_path, encoder_path, cfg_path = _download_mit_sem_seg(model_name)
     if decoder_path is None or encoder_path is None:
         return None
-
     if cfg_path is None:
         if model_name != "ade20k-resnet18dilated-c1_deepsup":
             return None
-        cfg = default_cfg
+        cfg = default_cfg.clone()
+        cfg.MODEL.arch_encoder = "resnet18dilated"
+        cfg.MODEL.fc_dim = 512
+        cfg.MODEL.arch_decoder = "c1_deepsup"
     else:
         cfg = default_cfg.clone()
         cfg.merge_from_file(cfg_path)
@@ -173,8 +173,6 @@ def isl_midas(
         DPT_Large,
         DPT_Hybrid,
         MiDaS_small
-    clean_state (bool): Optional. If True, the cached model files will be
-        deleted and newly downloaded from the repository (True by default).
     use_cuda (bool): Optional. If True, CUDA acceleration will be used (True by default).
     """
     try:
