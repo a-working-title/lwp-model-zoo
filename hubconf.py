@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*- #
 #!/usr/bin/env python3
 
+import csv
+from genericpath import exists
 import os
 import tempfile
 import torch
 from torch import hub
 from torch import nn
 from torch.utils.model_zoo import load_url
+from scipy.io import loadmat
 from typing import Final, Tuple
 from urllib import error as urllib_err
+from urllib.parse import urlparse
 
-dependencies = ["torch"]
+dependencies = ["torch", "scipy"]
 hub._validate_not_a_forked_repo = lambda a, b, c: True
 
 MIT_SEMSEG_DEFAULT_MODEL_NAME: Final = "ade20k-resnet101dilated-ppm_deepsup"
@@ -20,9 +24,12 @@ def _download_mit_sem_seg(
     model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME,
 ) -> Tuple[str, str, str]:
     BASE_URL: Final = "http://sceneparsing.csail.mit.edu/model/pytorch/"
+    GH_BASE_URL: Final = "https://raw.githubusercontent.com/CSAILVision/semantic-segmentation-pytorch/master/"
     DECODER_FMT: Final = "{}_decoder_epoch_{}.pth"
     ENCODER_FMT: Final = "{}_encoder_epoch_{}.pth"
-    CFG_URL_FMT: Final = "https://raw.githubusercontent.com/CSAILVision/semantic-segmentation-pytorch/master/config/{}.yaml"
+    CFG_URL_FMT: Final = GH_BASE_URL + "config/{}.yaml"
+    COLOR_MAT_URL: Final = GH_BASE_URL + "data/color150.mat"
+    LABEL_CSV_URL: Final = GH_BASE_URL + "data/object150_info.csv"
     MODEL_INFOS: Final = [
         ("ade20k-hrnetv2-c1", 30, "ade20k-hrnetv2"),
         (
@@ -68,11 +75,13 @@ def _download_mit_sem_seg(
 
     decoder_name, encoder_name, cfg_url = model_pairs[model_name]
     load_url(
-        BASE_URL + model_name + "/" + decoder_name[decoder_name.find("decoder") :],
+        BASE_URL + model_name + "/" +
+        decoder_name[decoder_name.find("decoder"):],
         file_name=decoder_name,
     )
     load_url(
-        BASE_URL + model_name + "/" + encoder_name[encoder_name.find("encoder") :],
+        BASE_URL + model_name + "/" +
+        encoder_name[encoder_name.find("encoder"):],
         file_name=encoder_name,
     )
     cfg_path = os.path.join(tempfile.gettempdir(), model_name + ".yaml")
@@ -91,13 +100,52 @@ def _download_mit_sem_seg(
             print(f"{err.__class__.__name__}: {err.msg}")
             cfg_path = None
 
+    color_mat_path = os.path.join(
+        tempfile.gettempdir(), os.path.basename(urlparse(COLOR_MAT_URL).path))
+    try:
+        os.remove(color_mat_path)
+    except:
+        pass
+    finally:
+        try:
+            hub.download_url_to_file(COLOR_MAT_URL, color_mat_path)
+        except (
+            urllib_err.ContentTooShortError,
+            urllib_err.HTTPError,
+            urllib_err.URLError,
+        ) as err:
+            print(f"{err.__class__.__name__}: {err.msg}")
+            color_mat_path = None
+
+    label_csv_path = os.path.join(
+        tempfile.gettempdir(), os.path.basename(urlparse(LABEL_CSV_URL).path))
+    try:
+        os.remove(label_csv_path)
+    except:
+        pass
+    finally:
+        try:
+            hub.download_url_to_file(LABEL_CSV_URL, label_csv_path)
+        except (
+            urllib_err.ContentTooShortError,
+            urllib_err.HTTPError,
+            urllib_err.URLError,
+        ) as err:
+            print(f"{err.__class__.__name__}: {err.msg}")
+            label_csv_path = None
+
     decoder_path = os.path.join(hub.get_dir(), "checkpoints", decoder_name)
     encoder_path = os.path.join(hub.get_dir(), "checkpoints", encoder_name)
 
     return (
         decoder_path if os.path.exists(decoder_path) else None,
         encoder_path if os.path.exists(encoder_path) else None,
-        cfg_path if cfg_path is not None and os.path.exists(cfg_path) else None,
+        cfg_path if cfg_path is not None and os.path.exists(
+            cfg_path) else None,
+        color_mat_path if color_mat_path is not None and os.path.exists(
+            color_mat_path) else None,
+        label_csv_path if label_csv_path is not None and os.path.exists(
+            label_csv_path) else None,
     )
 
 
@@ -123,12 +171,13 @@ def mit_semseg(model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME, use_cuda=True, **kwargs
         print(f"{err.__class__.__name__} : {err.msg}")
     model_name = "ade20k-resnet101-upernet"
 
-    decoder_path, encoder_path, cfg_path = _download_mit_sem_seg(model_name)
-    if decoder_path is None or encoder_path is None:
-        return None
+    decoder_path, encoder_path, cfg_path, color_mat_path, label_path = \
+        _download_mit_sem_seg(model_name)
+    if all(_path is None for _path in [decoder_path, encoder_path, color_mat_path, label_path]):
+        return None, None, None
     if cfg_path is None:
         if model_name != "ade20k-resnet18dilated-c1_deepsup":
-            return None
+            return None, None, None
         cfg = default_cfg.clone()
         cfg.MODEL.arch_encoder = "resnet18dilated"
         cfg.MODEL.fc_dim = 512
@@ -136,6 +185,13 @@ def mit_semseg(model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME, use_cuda=True, **kwargs
     else:
         cfg = default_cfg.clone()
         cfg.merge_from_file(cfg_path)
+
+    labels = {}
+    with open(label_path) as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            labels[int(row[0])] = row[5].split(";")[0]
 
     decoder = ModelBuilder.build_decoder(
         arch=cfg.MODEL.arch_decoder,
@@ -156,7 +212,7 @@ def mit_semseg(model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME, use_cuda=True, **kwargs
     if use_cuda:
         seg_module.cuda()
 
-    return seg_module
+    return seg_module, loadmat(color_mat_path), labels
 
 
 ISL_MIDAS_MODEL_TYPES: Final = ["DPT_Large", "DPT_Hybrid", "MiDaS_small"]
