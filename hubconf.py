@@ -61,7 +61,7 @@ def _download_mit_sem_seg(
         if model_name in _model_info:
             found = True
     if not found:
-        return None, None, None
+        return None, None, None, None, None
 
     model_pairs = {
         m: (
@@ -169,6 +169,7 @@ def mit_semseg(model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME, use_cuda=True, **kwargs
         from mit_semseg.models import ModelBuilder, SegmentationModule
     except (ModuleNotFoundError, ImportError) as err:
         print(f"{err.__class__.__name__} : {err.msg}")
+        return None, None, None
 
     (
         decoder_path,
@@ -239,6 +240,7 @@ def isl_midas(model_type=ISL_MIDAS_DEFAULT_MODEL_TYPE, use_cuda=True, **kwargs):
         import timm
     except (ModuleNotFoundError, ImportError) as err:
         print(f"{err.__class__.__name__} : {err.msg}")
+        return None, None
     if model_type not in ISL_MIDAS_MODEL_TYPES:
         return None, None
     midas = hub.load("intel-isl/MiDaS", model_type)
