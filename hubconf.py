@@ -2,35 +2,34 @@
 #!/usr/bin/env python3
 
 import csv
-from genericpath import exists
 import os
 import tempfile
 import torch
 from torch import hub
 from torch import nn
-from torch.utils.model_zoo import load_url
-from scipy.io import loadmat
-from typing import Final, Tuple
+from torch.utils.model_zoo import load_url as _load_url
+from scipy.io import loadmat as _loadmat
+from typing import Final as _Final, Tuple as _Tuple
 from urllib import error as urllib_err
-from urllib.parse import urlparse
+from urllib.parse import urlparse as _urlparse
 
 dependencies = ["torch", "scipy"]
 hub._validate_not_a_forked_repo = lambda a, b, c: True
 
-MIT_SEMSEG_DEFAULT_MODEL_NAME: Final = "ade20k-resnet101dilated-ppm_deepsup"
+MIT_SEMSEG_DEFAULT_MODEL_NAME: _Final = "ade20k-resnet101dilated-ppm_deepsup"
 
 
 def _download_mit_sem_seg(
     model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME,
-) -> Tuple[str, str, str]:
-    BASE_URL: Final = "http://sceneparsing.csail.mit.edu/model/pytorch/"
-    GH_BASE_URL: Final = "https://raw.githubusercontent.com/CSAILVision/semantic-segmentation-pytorch/master/"
-    DECODER_FMT: Final = "{}_decoder_epoch_{}.pth"
-    ENCODER_FMT: Final = "{}_encoder_epoch_{}.pth"
-    CFG_URL_FMT: Final = GH_BASE_URL + "config/{}.yaml"
-    COLOR_MAT_URL: Final = GH_BASE_URL + "data/color150.mat"
-    LABEL_CSV_URL: Final = GH_BASE_URL + "data/object150_info.csv"
-    MODEL_INFOS: Final = [
+) -> _Tuple[str, str, str, str, str]:
+    BASE_URL: _Final = "http://sceneparsing.csail.mit.edu/model/pytorch/"
+    GH_BASE_URL: _Final = "https://raw.githubusercontent.com/CSAILVision/semantic-segmentation-pytorch/master/"
+    DECODER_FMT: _Final = "{}_decoder_epoch_{}.pth"
+    ENCODER_FMT: _Final = "{}_encoder_epoch_{}.pth"
+    CFG_URL_FMT: _Final = GH_BASE_URL + "config/{}.yaml"
+    COLOR_MAT_URL: _Final = GH_BASE_URL + "data/color150.mat"
+    LABEL_CSV_URL: _Final = GH_BASE_URL + "data/object150_info.csv"
+    MODEL_INFOS: _Final = [
         ("ade20k-hrnetv2-c1", 30, "ade20k-hrnetv2"),
         (
             "ade20k-mobilenetv2dilated-c1_deepsup",
@@ -74,11 +73,11 @@ def _download_mit_sem_seg(
     }
 
     decoder_name, encoder_name, cfg_url = model_pairs[model_name]
-    load_url(
+    _load_url(
         BASE_URL + model_name + "/" + decoder_name[decoder_name.find("decoder") :],
         file_name=decoder_name,
     )
-    load_url(
+    _load_url(
         BASE_URL + model_name + "/" + encoder_name[encoder_name.find("encoder") :],
         file_name=encoder_name,
     )
@@ -99,7 +98,7 @@ def _download_mit_sem_seg(
             cfg_path = None
 
     color_mat_path = os.path.join(
-        tempfile.gettempdir(), os.path.basename(urlparse(COLOR_MAT_URL).path)
+        tempfile.gettempdir(), os.path.basename(_urlparse(COLOR_MAT_URL).path)
     )
     try:
         os.remove(color_mat_path)
@@ -209,7 +208,9 @@ def mit_semseg(model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME, use_cuda=True, **kwargs
     )
 
     encoder = ModelBuilder.build_encoder(
-        arch=cfg.MODEL.arch_encoder, fc_dim=cfg.MODEL.fc_dim, weights=encoder_path,
+        arch=cfg.MODEL.arch_encoder,
+        fc_dim=cfg.MODEL.fc_dim,
+        weights=encoder_path,
     )
 
     crit = nn.NLLLoss(ignore_index=-1)
@@ -218,11 +219,11 @@ def mit_semseg(model_name=MIT_SEMSEG_DEFAULT_MODEL_NAME, use_cuda=True, **kwargs
     if use_cuda:
         seg_module.cuda()
 
-    return seg_module, loadmat(color_mat_path)["colors"], labels
+    return seg_module, _loadmat(color_mat_path)["colors"], labels
 
 
-ISL_MIDAS_MODEL_TYPES: Final = ["DPT_Large", "DPT_Hybrid", "MiDaS_small"]
-ISL_MIDAS_DEFAULT_MODEL_TYPE: Final = ISL_MIDAS_MODEL_TYPES[0]
+ISL_MIDAS_MODEL_TYPES: _Final = ["DPT_Large", "DPT_Hybrid", "MiDaS_small"]
+ISL_MIDAS_DEFAULT_MODEL_TYPE: _Final = ISL_MIDAS_MODEL_TYPES[0]
 
 
 def isl_midas(model_type=ISL_MIDAS_DEFAULT_MODEL_TYPE, use_cuda=True, **kwargs):
