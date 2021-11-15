@@ -1,9 +1,9 @@
 import csv
 import errno
 import os
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from urllib import error as urllib_err
-import torch.nn as nn
+from torch import nn
 from torch.hub import get_dir, download_url_to_file
 from torch.utils.model_zoo import load_url
 from mit_semseg.config import cfg as default_cfg
@@ -137,6 +137,9 @@ class ModelInfo(Config):
                 labels[int(row[0])] = row[5].split(";")[0]
         return labels
 
+    def list_models(self) -> List[str]:
+        return self.model_names
+
 
 def mit_semseg(model_name="", use_cuda=True, **kwargs):
     """
@@ -151,7 +154,30 @@ def mit_semseg(model_name="", use_cuda=True, **kwargs):
         ade20k-resnet101-upernet,
         ade20k-resnet101dilated-ppm_deepsup (default).
     use_cuda (bool): Optional. If True (default), CUDA acceleration will be used.
+    keyword arguments:
+        sub_command (str): Optional. If given, do the given sub-command rather than returning fully loaded models.
+            "list_models": Get the list of models in this model category
+            "download_only": Just download and cache the given models
     """
+    sub_cmd = ""
+    if "sub_command" in kwargs:
+        sub_cmd = kwargs.get("sub_command")
+
+    if sub_cmd:
+        if sub_cmd == "list_models":
+            return ModelInfo(mdl=model_name).list_models()
+        if sub_cmd == "download_only":
+            if not model_name:
+                print(
+                    "Invalid argument:",
+                    "download_only mode requires model_name explicitly given",
+                )
+                return None
+            _model = ModelInfo(mdl=model_name)
+            _ = _model.download_models()
+            return None
+        print(f"Err: {sub_cmd} is not a valid sub command")
+        return None
     model = ModelInfo(model_name)
     decoder_path, encoder_path = model.download_models()
     cfg = model.get_config()  # type: Optional[CfgNode]
