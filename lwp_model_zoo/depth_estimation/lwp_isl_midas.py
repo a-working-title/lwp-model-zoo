@@ -60,6 +60,9 @@ class ModelInfo:
         self.__midas = hub.load(self.gh_repo, self.__model_name)
         self.__transforms = hub.load(self.gh_repo, "transforms")
 
+    def list_models(self) -> List[str]:
+        return self.ISL_MIDAS_MODELS
+
 
 def isl_midas(model_name="", use_cuda=True, **kwargs):
     """
@@ -69,7 +72,31 @@ def isl_midas(model_name="", use_cuda=True, **kwargs):
         DPT_Hybrid,
         MiDaS_small
     use_cuda (bool): Optional. If True (default), CUDA acceleration will be used.
+    keyword arguments:
+        sub_command (str): Optional. If given, do the given sub-command rather than returning fully loaded models.
+            "list_models": Get the list of models in this model category
+            "download_only": Just download and cache the given models
     """
+
+    sub_cmd = ""
+    if "sub_command" in kwargs:
+        sub_cmd = kwargs.get("sub_command")
+
+    if sub_cmd:
+        if sub_cmd == "list_models":
+            return ModelInfo().list_models()
+        if sub_cmd == "download_only":
+            if not model_name:
+                print(
+                    "Invalid argument:",
+                    "download_only mode requires model_name explicitly given",
+                )
+                return None
+            _model = ModelInfo(mdl=model_name)
+            _model.download_models()
+            return None
+        print(f"Err: {sub_cmd} is not a valid sub command")
+        return None
 
     model = ModelInfo(mdl=model_name, use_cuda=use_cuda)
     model.download_models()
