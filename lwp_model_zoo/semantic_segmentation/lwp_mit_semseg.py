@@ -197,4 +197,4 @@ def mit_semseg(model_name="", use_cuda=True, **kwargs):
     if use_cuda:
         seg_module.cuda()
 
-    return seg_module
+    return seg_module, model.get_color_map(), model.get_labels()
