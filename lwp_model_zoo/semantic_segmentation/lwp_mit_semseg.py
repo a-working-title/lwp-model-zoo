@@ -189,7 +189,9 @@ def mit_semseg(model_name="", use_cuda=True, **kwargs):
     )
 
     encoder = ModelBuilder.build_encoder(
-        arch=cfg.MODEL.arch_encoder, fc_dim=cfg.MODEL.fc_dim, weights=encoder_path,
+        arch=cfg.MODEL.arch_encoder,
+        fc_dim=cfg.MODEL.fc_dim,
+        weights=encoder_path,
     )
     crit = nn.NLLLoss(ignore_index=-1)
     seg_module = SegmentationModule(encoder, decoder, crit)
