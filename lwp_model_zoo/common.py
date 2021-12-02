@@ -9,6 +9,12 @@ def get_torchhub_dir(
 
     normalized_br = repo_branch.replace("/", "_")
     return os.path.join(
-        hub.get_dir(), "_".join([repo_owner, lwp_repo_name, normalized_br,]),
+        hub.get_dir(),
+        "_".join(
+            [
+                repo_owner,
+                lwp_repo_name,
+                normalized_br,
+            ]
+        ),
     )
-

@@ -5,9 +5,9 @@ GH_CONTENT_URL: Final[str] = "https://raw.githubusercontent.com/"
 
 class Config:
     BASE_URL: Final[str] = "http://sceneparsing.csail.mit.edu/model/pytorch/"
-    GH_BASE_URL: Final[
-        str
-    ] = GH_CONTENT_URL + "CSAILVision/semantic-segmentation-pytorch/master/"
+    GH_BASE_URL: Final[str] = (
+        GH_CONTENT_URL + "CSAILVision/semantic-segmentation-pytorch/master/"
+    )
     DECODER_FMT: Final[str] = "{}_decoder_epoch_{}.pth"
     ENCODER_FMT: Final[str] = "{}_encoder_epoch_{}.pth"
     CFG_URL_FMT: Final[str] = GH_BASE_URL + "config/{}.yaml"
@@ -20,13 +20,21 @@ class Config:
             20,
             "ade20k-mobilenetv2dilated-c1_deepsup",
         ),
-        ("ade20k-resnet18dilated-c1_deepsup", 20, None,),
+        (
+            "ade20k-resnet18dilated-c1_deepsup",
+            20,
+            None,
+        ),
         (
             "ade20k-resnet18dilated-ppm_deepsup",
             20,
             "ade20k-resnet18dilated-ppm_deepsup",
         ),
-        ("ade20k-resnet50-upernet", 30, "ade20k-resnet50-upernet",),
+        (
+            "ade20k-resnet50-upernet",
+            30,
+            "ade20k-resnet50-upernet",
+        ),
         (
             "ade20k-resnet50dilated-ppm_deepsup",
             20,
